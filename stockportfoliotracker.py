@@ -1,60 +1,86 @@
-import yfinance as yf
+import requests
 
-portfolio = {}
+API_KEY = 'your_financial_api_key_here'
 
-def get_stock_price(symbol):
-    stock = yf.Ticker(symbol)
-    stock_info = stock.history(period='1d')
-    if not stock_info.empty:
-        return stock_info['Close'].iloc[-1]
+portfolio = []
+
+def get_stock_data(stock_symbol):
+    url = f'https://www.alphavantage.co/query?function=TIME_SERIES_INTRADAY&symbol={stock_symbol}&interval=5min&apikey={API_KEY}'
+    response = requests.get(url)
+    data = response.json()
+    
+    if "Time Series (5min)" in data:
+        latest_time = sorted(data['Time Series (5min)'].keys())[0]
+        latest_price = float(data['Time Series (5min)'][latest_time]['4. close'])
+        return {
+            'symbol': stock_symbol,
+            'latest_price': latest_price
+        }
     else:
-        print(f"Error fetching data for {symbol}")
         return None
 
-def add_stock(symbol, shares):
-    if symbol in portfolio:
-        portfolio[symbol] += shares
+def add_stock():
+    stock_symbol = input("Enter stock symbol: ").upper()
+    quantity = int(input("Enter quantity: "))
+    
+    stock_data = get_stock_data(stock_symbol)
+    
+    if stock_data:
+        portfolio.append({
+            'symbol': stock_symbol,
+            'quantity': quantity,
+            'initial_price': stock_data['latest_price'],
+            'current_price': stock_data['latest_price']
+        })
+        print(f"Stock {stock_symbol} added successfully!")
     else:
-        portfolio[symbol] = shares
+        print("Stock symbol not found!")
 
-def remove_stock(symbol, shares):
-    if symbol in portfolio:
-        if portfolio[symbol] > shares:
-            portfolio[symbol] -= shares
-        elif portfolio[symbol] == shares:
-            del portfolio[symbol]
-        else:
-            print(f"Cannot remove {shares} shares. Only {portfolio[symbol]} shares available.")
-    else:
-        print(f"{symbol} not found in portfolio.")
+def remove_stock():
+    stock_symbol = input("Enter stock symbol to remove: ").upper()
+    global portfolio
+    portfolio = [stock for stock in portfolio if stock['symbol'] != stock_symbol]
+    print(f"Stock {stock_symbol} removed successfully!")
 
-def display_portfolio():
-    print("Your portfolio:")
-    for symbol, shares in portfolio.items():
-        price = get_stock_price(symbol)
-        if price:
-            value = price * shares
-            print(f"{symbol}: {shares} shares at ${price:.2f} each, total value: ${value:.2f}")
+def view_portfolio():
+    total_value = 0
+    for stock in portfolio:
+        stock_data = get_stock_data(stock['symbol'])
+        if stock_data:
+            stock['current_price'] = stock_data['latest_price']
+            stock['value'] = stock['quantity'] * stock['current_price']
+            stock['performance'] = (stock['current_price'] - stock['initial_price']) * stock['quantity']
+            total_value += stock['value']
+    
+    print("\nCurrent Portfolio:")
+    for stock in portfolio:
+        print(f"Symbol: {stock['symbol']}, Quantity: {stock['quantity']}, "
+              f"Initial Price: {stock['initial_price']}, Current Price: {stock['current_price']}, "
+              f"Performance: {stock['performance']:.2f} USD")
+    
+    print(f"\nTotal Portfolio Value: {total_value:.2f} USD\n")
 
-def main():
+def menu():
     while True:
-        print("\n1. Add Stock\n2. Remove Stock\n3. Display Portfolio\n4. Quit")
+        print("\nStock Portfolio Manager")
+        print("1. Add Stock")
+        print("2. Remove Stock")
+        print("3. View Portfolio")
+        print("4. Exit")
+        
         choice = input("Enter your choice: ")
         
         if choice == '1':
-            symbol = input("Enter stock symbol: ").upper()
-            shares = int(input("Enter number of shares: "))
-            add_stock(symbol, shares)
+            add_stock()
         elif choice == '2':
-            symbol = input("Enter stock symbol: ").upper()
-            shares = int(input("Enter number of shares: "))
-            remove_stock(symbol, shares)
+            remove_stock()
         elif choice == '3':
-            display_portfolio()
+            view_portfolio()
         elif choice == '4':
+            print("Exiting the application.")
             break
         else:
             print("Invalid choice. Please try again.")
 
-if __name__ == "__main__":
-    main()
+if __name__ == '__main__':
+    menu()
